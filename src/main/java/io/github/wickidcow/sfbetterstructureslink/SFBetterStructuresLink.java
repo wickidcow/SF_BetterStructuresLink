@@ -9,13 +9,15 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public final class SFBetterStructuresLink extends JavaPlugin implements Listener {
 
+    private static final int CONFIG_VERSION = 2;
+
     private ItemProviderRegistry itemProviders;
     private LootService lootService;
     private BetterStructuresHook betterStructuresHook;
 
     @Override
     public void onEnable() {
-        saveDefaultConfig();
+        prepareConfig();
 
         itemProviders = new ItemProviderRegistry(this);
         itemProviders.refresh();
@@ -53,6 +55,7 @@ public final class SFBetterStructuresLink extends JavaPlugin implements Listener
 
     public LootService.ValidationReport reloadBridge() {
         reloadConfig();
+        migrateConfig();
         itemProviders.refresh();
         lootService.reload();
 
@@ -60,6 +63,26 @@ public final class SFBetterStructuresLink extends JavaPlugin implements Listener
         logProviderState();
         logValidation(report);
         return report;
+    }
+
+    private void prepareConfig() {
+        saveDefaultConfig();
+        migrateConfig();
+    }
+
+    private void migrateConfig() {
+        int currentVersion = getConfig().getInt("config-version", 0);
+        if (currentVersion < CONFIG_VERSION) {
+            String currentPool = getConfig().getString("loot.default-pool", "mixed");
+            if ("standard".equalsIgnoreCase(currentPool)) {
+                getConfig().set("loot.default-pool", "mixed");
+            }
+            getConfig().set("config-version", CONFIG_VERSION);
+            getLogger().info("Migrated SF BetterStructures Link config to version " + CONFIG_VERSION + ".");
+        }
+
+        getConfig().options().copyDefaults(true);
+        saveConfig();
     }
 
     public LootService getLootService() {
