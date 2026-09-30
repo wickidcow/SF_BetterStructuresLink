@@ -1,3 +1,9 @@
+## 0.3.1 build correction
+
+Rebuilt against the genuine Paper API. The previously supplied 0.3.0 JAR incorrectly invoked `FileConfiguration` as an interface, causing an `IncompatibleClassChangeError` during startup. Configuration and loot behavior are unchanged. Replace the old plugin JAR and restart; keep the existing config folder.
+
+Build with `mvn clean verify`. The build checks configuration call bytecode against Paper and CI also checks the compiled classes against Paper 26.2. Do not compile this plugin against hand-written Bukkit API stubs.
+
 # SF BetterStructures Link
 
 A lightweight multi-ecosystem loot bridge for [MagmaGuy's BetterStructures](https://github.com/MagmaGuy/BetterStructures).

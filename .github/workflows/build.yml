@@ -17,15 +17,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java 21
+      - name: Set up Java 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "25"
           cache: maven
 
       - name: Build
-        run: mvn -B -ntp clean package
+        run: mvn -B -ntp clean verify
+
+      - name: Check compiled plugin against Paper 26.2
+        run: mvn -B -ntp surefire:test -Dpaper.version=26.2.build.125-stable
+
+      - name: Reject bundled server API
+        shell: bash
+        run: |
+          set -euo pipefail
+          if jar tf target/SF_BetterStructuresLink-*.jar | grep -Eq '^(org/bukkit|io/papermc/paper)/'; then
+            echo "Plugin must not package server API classes"
+            exit 1
+          fi
 
       - name: Upload plugin JAR
         uses: actions/upload-artifact@v4
