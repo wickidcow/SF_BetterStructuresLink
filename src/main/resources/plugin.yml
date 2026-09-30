@@ -1,0 +1,22 @@
+name: SF_BetterStructuresLink
+version: '\${project.version}'
+main: io.github.wickidcow.sfbetterstructureslink.SFBetterStructuresLink
+api-version: '1.21'
+author: wickidcow
+description: Adds configurable registered Slimefun loot to BetterStructures-generated containers.
+website: https://github.com/wickidcow/SF_BetterStructuresLink
+depend:
+  - BetterStructures
+  - Slimefun
+
+commands:
+  sfbsl:
+    description: Admin command for SF BetterStructures Link
+    aliases: [sflink, sfstructures]
+    usage: /sfbsl <status|reload|validate>
+    permission: sfbetterstructureslink.admin
+
+permissions:
+  sfbetterstructureslink.admin:
+    description: Allows administration of SF BetterStructures Link
+    default: op

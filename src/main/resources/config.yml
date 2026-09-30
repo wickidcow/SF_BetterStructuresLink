@@ -1,0 +1,57 @@
+# SF BetterStructures Link
+#
+# BetterStructures still creates and fills the container normally.
+# This plugin only gets a chance to add configured Slimefun items afterward.
+
+loot:
+  enabled: true
+
+  # Percent chance for each BetterStructures loot container to receive Slimefun loot.
+  # 1.0 = 1%, 0.1 = 0.1%, 5.0 = 5%.
+  chance-percent: 1.0
+
+  # Number of weighted item rolls after the chance succeeds.
+  rolls: 1
+
+  # Hard cap on how many Slimefun stacks this plugin may add to one container.
+  max-items-per-container: 1
+
+  default-pool: standard
+  debug: false
+
+  worlds:
+    # Empty allow list = all worlds are allowed unless denied below.
+    allow: []
+    deny: []
+
+# Only IDs listed in a pool can be generated.
+# IDs are resolved from the live Slimefun registry, so registered addon items work too.
+pools:
+  standard:
+    CARBON:
+      weight: 100
+      min: 1
+      max: 4
+    SYNTHETIC_DIAMOND:
+      weight: 20
+      min: 1
+      max: 1
+    REINFORCED_ALLOY_INGOT:
+      weight: 5
+      min: 1
+      max: 1
+
+# Optional overrides for specific BetterStructures treasure config filenames.
+# These are checked in order. "match" supports * wildcards.
+#
+# Example:
+# treasure-tables:
+#   - match: "*underground*"
+#     chance-percent: 2.0
+#     pool: standard
+#   - match: "treasure_end.yml"
+#     chance-percent: 3.0
+#     rolls: 1
+#     max-items-per-container: 1
+#     pool: end
+treasure-tables: []
