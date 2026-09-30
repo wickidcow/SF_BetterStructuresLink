@@ -58,4 +58,4 @@ BetterStructures exposes a `ChestFillEvent` before the generated container is co
 
 ## Project status
 
-Early development.
+Early development. Initial test builds are produced automatically by GitHub Actions.
