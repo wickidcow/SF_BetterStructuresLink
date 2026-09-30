@@ -336,7 +336,7 @@ final class ItemProviderRegistry {
 
             String normalized = itemId.trim().toLowerCase(Locale.ROOT);
             if (!normalized.contains(":")) {
-                normalized = "rebar:" + normalized;
+                normalized = providerId + ":" + normalized;
             }
             return NamespacedKey.fromString(normalized);
         }
