@@ -10,8 +10,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -39,9 +45,36 @@ jobs:
             exit 1
           fi
 
-      - name: Upload plugin JAR
-        uses: actions/upload-artifact@v4
-        with:
-          name: SF_BetterStructuresLink
-          path: target/SF_BetterStructuresLink-*.jar
-          if-no-files-found: error
+      - name: Publish tested raw development JAR
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          JARS=(target/SF_BetterStructuresLink-*.jar)
+          if [[ ${#JARS[@]} -ne 1 ]]; then
+            echo "Expected exactly one plugin JAR."
+            exit 1
+          fi
+          JAR="${JARS[0]}"
+          NOTES_FILE="$RUNNER_TEMP/development-release-notes.txt"
+          printf '%s\n' "Raw plugin JAR from tested main commit $GITHUB_SHA." "Development snapshot; not a stable release." "Built against the real Paper API; keeps the existing configuration and loot behavior." > "$NOTES_FILE"
+
+          if gh release view dev-build --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh api --method PATCH "/repos/$GITHUB_REPOSITORY/git/refs/tags/dev-build" -f sha="$GITHUB_SHA" -F force=true >/dev/null
+            gh release upload dev-build "$JAR" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit dev-build --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --notes-file "$NOTES_FILE" --prerelease
+          else
+            gh release create dev-build "$JAR" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "BetterStructuresLink Development Build" --notes-file "$NOTES_FILE" --prerelease
+          fi
+
+          EXPECTED_DIGEST="sha256:$(sha256sum "$JAR" | awk '{print $1}')"
+          ASSET_NAME="$(basename "$JAR")"
+          PUBLISHED_DIGEST="$(gh api "/repos/$GITHUB_REPOSITORY/releases/tags/dev-build" | jq -r --arg name "$ASSET_NAME" '.assets[] | select(.name == $name) | .digest')"
+          if [[ "$PUBLISHED_DIGEST" != "$EXPECTED_DIGEST" ]]; then
+            echo "Published JAR digest does not match the tested JAR."
+            exit 1
+          fi
+          echo "Published raw JAR verified: $EXPECTED_DIGEST"

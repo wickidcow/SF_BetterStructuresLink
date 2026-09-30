@@ -6,6 +6,8 @@ Build with `mvn clean verify`. The build checks configuration call bytecode agai
 
 # SF BetterStructures Link
 
+[Download the raw 0.3.1-SNAPSHOT JAR](https://github.com/wickidcow/SF_BetterStructuresLink/releases/download/dev-build/SF_BetterStructuresLink-0.3.1-SNAPSHOT.jar). Place it directly in `plugins/` and restart.
+
 A lightweight multi-ecosystem loot bridge for [MagmaGuy's BetterStructures](https://github.com/MagmaGuy/BetterStructures).
 
 The plugin can add **real registered items** from optional content systems to BetterStructures-generated chests and barrels without patching BetterStructures.
