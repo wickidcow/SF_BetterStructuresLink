@@ -49,7 +49,7 @@ public final class LootService {
         defaultChancePercent = clampChance(config.getDouble("loot.chance-percent", 1.0));
         defaultRolls = Math.max(1, config.getInt("loot.rolls", 1));
         defaultMaxItems = Math.max(1, config.getInt("loot.max-items-per-container", 1));
-        defaultPool = config.getString("loot.default-pool", "standard");
+        defaultPool = config.getString("loot.default-pool", "slimefun");
 
         allowedWorlds = normalizeWorlds(config.getStringList("loot.worlds.allow"));
         deniedWorlds = normalizeWorlds(config.getStringList("loot.worlds.deny"));
@@ -83,7 +83,7 @@ public final class LootService {
         }
 
         LootPool pool = pools.get(rule.pool());
-        if (pool == null || pool.entries().isEmpty() || pool.totalWeight() <= 0) {
+        if (pool == null || pool.tiers().isEmpty() || pool.totalWeight() <= 0.0) {
             debug("Skipped container because pool '" + rule.pool() + "' is unavailable.");
             return;
         }
@@ -104,7 +104,6 @@ public final class LootService {
         triggeredContainers++;
 
         int stackLimit = Math.min(rule.rolls(), rule.maxItems());
-        int inserted = 0;
 
         for (int roll = 0; roll < stackLimit && !freeSlots.isEmpty(); roll++) {
             LootEntry entry = pool.pick();
@@ -126,8 +125,6 @@ public final class LootService {
             int slotIndex = ThreadLocalRandom.current().nextInt(freeSlots.size());
             int slot = freeSlots.remove(slotIndex);
             inventory.setItem(slot, stack);
-
-            inserted++;
             injectedStacks++;
 
             debug("Added " + stack.getAmount() + "x " + entry.id()
@@ -140,8 +137,10 @@ public final class LootService {
     public ValidationReport validateConfiguredItems() {
         Set<String> ids = new LinkedHashSet<>();
         for (LootPool pool : pools.values()) {
-            for (LootEntry entry : pool.entries()) {
-                ids.add(entry.id());
+            for (LootTier tier : pool.tiers()) {
+                for (LootEntry entry : tier.entries()) {
+                    ids.add(entry.id());
+                }
             }
         }
 
@@ -195,33 +194,110 @@ public final class LootService {
                 continue;
             }
 
-            List<LootEntry> entries = new ArrayList<>();
-            int totalWeight = 0;
+            List<LootTier> tiers = loadTieredPool(poolName, poolSection);
+            if (tiers.isEmpty()) {
+                tiers = loadLegacyFlatPool(poolName, poolSection);
+            }
 
-            for (String itemId : poolSection.getKeys(false)) {
-                ConfigurationSection itemSection = poolSection.getConfigurationSection(itemId);
-                if (itemSection == null) {
+            double totalWeight = tiers.stream().mapToDouble(LootTier::weight).sum();
+            loaded.put(poolName, new LootPool(poolName, List.copyOf(tiers), totalWeight));
+        }
+
+        return loaded;
+    }
+
+    private List<LootTier> loadTieredPool(String poolName, ConfigurationSection poolSection) {
+        ConfigurationSection tierRoot = poolSection.getConfigurationSection("tiers");
+        if (tierRoot == null) {
+            tierRoot = poolSection;
+        }
+
+        List<LootTier> tiers = new ArrayList<>();
+        for (String tierName : tierRoot.getKeys(false)) {
+            if ("tiers".equalsIgnoreCase(tierName)) {
+                continue;
+            }
+
+            ConfigurationSection tierSection = tierRoot.getConfigurationSection(tierName);
+            if (tierSection == null || !tierSection.isList("items")) {
+                continue;
+            }
+
+            double tierWeight = tierSection.getDouble("weight", 1.0);
+            if (!Double.isFinite(tierWeight) || tierWeight <= 0.0) {
+                plugin.getLogger().warning("Ignoring tier " + poolName + "." + tierName
+                        + " because its weight is not positive.");
+                continue;
+            }
+
+            List<LootEntry> entries = new ArrayList<>();
+            double totalItemWeight = 0.0;
+
+            for (Map<?, ?> itemMap : tierSection.getMapList("items")) {
+                String id = stringValue(itemMap.get("slimefunItem"));
+                if (id == null || id.isBlank()) {
+                    id = stringValue(itemMap.get("id"));
+                }
+                if (id == null || id.isBlank()) {
+                    plugin.getLogger().warning("Ignoring item without slimefunItem/id in "
+                            + poolName + "." + tierName);
                     continue;
                 }
 
-                int weight = itemSection.getInt("weight", 1);
-                int min = Math.max(1, itemSection.getInt("min", 1));
-                int max = Math.max(min, itemSection.getInt("max", min));
-
-                if (weight <= 0) {
-                    plugin.getLogger().warning("Ignoring " + itemId + " in pool " + poolName
+                Double weightValue = doubleValue(itemMap.get("weight"));
+                double itemWeight = weightValue == null ? 1.0 : weightValue;
+                if (!Double.isFinite(itemWeight) || itemWeight <= 0.0) {
+                    plugin.getLogger().warning("Ignoring " + id + " in " + poolName + "." + tierName
                             + " because its weight is not positive.");
                     continue;
                 }
 
-                entries.add(new LootEntry(itemId, weight, min, max));
-                totalWeight += weight;
+                AmountRange amount = parseAmount(itemMap.get("amount"), 1, 1);
+                entries.add(new LootEntry(id, itemWeight, amount.min(), amount.max()));
+                totalItemWeight += itemWeight;
             }
 
-            loaded.put(poolName, new LootPool(poolName, List.copyOf(entries), totalWeight));
+            if (!entries.isEmpty() && totalItemWeight > 0.0) {
+                tiers.add(new LootTier(
+                        tierName,
+                        tierWeight,
+                        List.copyOf(entries),
+                        totalItemWeight));
+            }
         }
 
-        return loaded;
+        return tiers;
+    }
+
+    private List<LootTier> loadLegacyFlatPool(String poolName, ConfigurationSection poolSection) {
+        List<LootEntry> entries = new ArrayList<>();
+        double totalWeight = 0.0;
+
+        for (String itemId : poolSection.getKeys(false)) {
+            ConfigurationSection itemSection = poolSection.getConfigurationSection(itemId);
+            if (itemSection == null) {
+                continue;
+            }
+
+            double weight = itemSection.getDouble("weight", 1.0);
+            int min = Math.max(1, itemSection.getInt("min", 1));
+            int max = Math.max(min, itemSection.getInt("max", min));
+
+            if (!Double.isFinite(weight) || weight <= 0.0) {
+                plugin.getLogger().warning("Ignoring " + itemId + " in pool " + poolName
+                        + " because its weight is not positive.");
+                continue;
+            }
+
+            entries.add(new LootEntry(itemId, weight, min, max));
+            totalWeight += weight;
+        }
+
+        if (entries.isEmpty()) {
+            return List.of();
+        }
+
+        return List.of(new LootTier("default", 1.0, List.copyOf(entries), totalWeight));
     }
 
     private List<TableRule> loadTableRules(List<Map<?, ?>> maps) {
@@ -315,6 +391,32 @@ public final class LootService {
         return freeSlots;
     }
 
+    private static AmountRange parseAmount(Object value, int fallbackMin, int fallbackMax) {
+        if (value instanceof Number number) {
+            int amount = Math.max(1, number.intValue());
+            return new AmountRange(amount, amount);
+        }
+
+        if (value == null) {
+            return new AmountRange(fallbackMin, fallbackMax);
+        }
+
+        String text = String.valueOf(value).trim();
+        try {
+            int separator = text.indexOf('-');
+            if (separator > 0) {
+                int min = Math.max(1, Integer.parseInt(text.substring(0, separator).trim()));
+                int max = Math.max(min, Integer.parseInt(text.substring(separator + 1).trim()));
+                return new AmountRange(min, max);
+            }
+
+            int amount = Math.max(1, Integer.parseInt(text));
+            return new AmountRange(amount, amount);
+        } catch (NumberFormatException ignored) {
+            return new AmountRange(fallbackMin, fallbackMax);
+        }
+    }
+
     private static double clampChance(double chance) {
         return Math.max(0.0, Math.min(100.0, chance));
     }
@@ -377,23 +479,49 @@ public final class LootService {
         }
     }
 
-    private record LootEntry(String id, int weight, int minAmount, int maxAmount) {}
+    private record AmountRange(int min, int max) {}
 
-    private record LootPool(String name, List<LootEntry> entries, int totalWeight) {
+    private record LootEntry(String id, double weight, int minAmount, int maxAmount) {}
+
+    private record LootTier(
+            String name,
+            double weight,
+            List<LootEntry> entries,
+            double totalItemWeight) {
+
         LootEntry pick() {
-            if (entries.isEmpty() || totalWeight <= 0) {
+            if (entries.isEmpty() || totalItemWeight <= 0.0) {
                 return null;
             }
 
-            int roll = ThreadLocalRandom.current().nextInt(totalWeight);
-            int cumulative = 0;
+            double roll = ThreadLocalRandom.current().nextDouble(totalItemWeight);
+            double cumulative = 0.0;
             for (LootEntry entry : entries) {
                 cumulative += entry.weight();
                 if (roll < cumulative) {
                     return entry;
                 }
             }
-            return null;
+            return entries.get(entries.size() - 1);
+        }
+    }
+
+    private record LootPool(String name, List<LootTier> tiers, double totalWeight) {
+        LootEntry pick() {
+            if (tiers.isEmpty() || totalWeight <= 0.0) {
+                return null;
+            }
+
+            double roll = ThreadLocalRandom.current().nextDouble(totalWeight);
+            double cumulative = 0.0;
+            for (LootTier tier : tiers) {
+                cumulative += tier.weight();
+                if (roll < cumulative) {
+                    return tier.pick();
+                }
+            }
+
+            return tiers.get(tiers.size() - 1).pick();
         }
     }
 
