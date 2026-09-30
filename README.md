@@ -97,3 +97,5 @@ pools:
 - Optional Pylon
 
 The project keeps BetterStructures independent and avoids changing Slimefun/Rebar/Pylon persistence, block storage, machine data, or registries.
+
+<!-- CI validation branch for the multi-provider build. -->
