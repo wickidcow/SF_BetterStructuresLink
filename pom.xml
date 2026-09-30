@@ -5,17 +5,14 @@
 
     <groupId>io.github.wickidcow</groupId>
     <artifactId>SF_BetterStructuresLink</artifactId>
-    <version>0.2.0-SNAPSHOT</version>
+    <version>0.3.0-SNAPSHOT</version>
     <name>SF BetterStructures Link</name>
-    <description>Bridge BetterStructures generated loot with registered Slimefun items.</description>
+    <description>Injects optional Slimefun, Rebar and Pylon loot into BetterStructures containers.</description>
 
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <paper.version>1.21.11-R0.1-SNAPSHOT</paper.version>
-        <slimefun.groupId>com.github.SlimefunGuguProject</slimefun.groupId>
-        <slimefun.artifactId>Slimefun4</slimefun.artifactId>
-        <slimefun.version>2025.1</slimefun.version>
     </properties>
 
     <repositories>
@@ -23,29 +20,19 @@
             <id>papermc</id>
             <url>https://repo.papermc.io/repository/maven-public/</url>
         </repository>
-        <repository>
-            <id>jitpack</id>
-            <url>https://jitpack.io</url>
-        </repository>
     </repositories>
 
     <dependencies>
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
-            <version>\${paper.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>\${slimefun.groupId}</groupId>
-            <artifactId>\${slimefun.artifactId}</artifactId>
-            <version>\${slimefun.version}</version>
+            <version>${paper.version}</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
 
     <build>
-        <finalName>SF_BetterStructuresLink-\${project.version}</finalName>
+        <finalName>SF_BetterStructuresLink-${project.version}</finalName>
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
@@ -58,7 +45,7 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.14.1</version>
                 <configuration>
-                    <release>\${maven.compiler.release}</release>
+                    <release>${maven.compiler.release}</release>
                     <showDeprecation>true</showDeprecation>
                     <compilerArgs>
                         <arg>-Xlint:deprecation</arg>

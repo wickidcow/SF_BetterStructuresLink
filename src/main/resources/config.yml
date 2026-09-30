@@ -1,9 +1,18 @@
 # SF BetterStructures Link
 #
-# This plugin owns Slimefun structure loot completely.
-# Do NOT add "slimefunItem" keys to BetterStructures treasure YAML files.
-# BetterStructures fills its normal loot first, then this plugin gets a rare
-# chance to add registered Slimefun items to the same generated container.
+# BetterStructures keeps ownership of structure generation and its normal loot.
+# This plugin independently detects optional item ecosystems and can inject their
+# real registered ItemStacks after BetterStructures fills a generated container.
+#
+# No treasure_slimefun.yml (or Rebar/Pylon equivalent) is required.
+
+providers:
+  slimefun:
+    enabled: true
+  rebar:
+    enabled: true
+  pylon:
+    enabled: true
 
 loot:
   enabled: true
@@ -12,13 +21,13 @@ loot:
   # 1.0 = 1%, 0.5 = 0.5%, 5.0 = 5%.
   chance-percent: 1.0
 
-  # How many Slimefun stacks are rolled when the rare chance succeeds.
+  # Number of successful custom stacks to attempt after the rare roll succeeds.
   rolls: 1
 
-  # Hard safety cap per generated container.
+  # Hard cap per generated container.
   max-items-per-container: 1
 
-  default-pool: slimefun
+  default-pool: mixed
   debug: false
 
   worlds:
@@ -26,98 +35,193 @@ loot:
     allow: []
     deny: []
 
-# BetterStructures-style two-stage weighting:
-# 1) choose a tier by tier weight
-# 2) choose one item inside that tier by item weight
+# One shared weighted pool can contain entries from any supported provider.
+# If a provider is not installed/enabled, its entries are removed from the
+# effective roll automatically and the remaining weights are normalized.
 #
-# These values were migrated from the former treasure_slimefun.yml.
+# The Slimefun entries below preserve the former treasure_slimefun.yml rarity
+# tiers and amounts. Pylon defaults are intentionally limited to useful
+# materials/consumables rather than powerful machines or creative/admin items.
 pools:
-  slimefun:
+  mixed:
     common:
       weight: 70.0
       items:
-        - slimefunItem: IRON_DUST
+        - provider: slimefun
+          id: IRON_DUST
           amount: 1-4
           weight: 14.0
-        - slimefunItem: GOLD_DUST
+        - provider: slimefun
+          id: GOLD_DUST
           amount: 1-3
           weight: 10.0
-        - slimefunItem: COPPER_DUST
+        - provider: slimefun
+          id: COPPER_DUST
           amount: 1-4
           weight: 14.0
-        - slimefunItem: TIN_DUST
+        - provider: slimefun
+          id: TIN_DUST
           amount: 1-4
           weight: 12.0
-        - slimefunItem: SILVER_DUST
+        - provider: slimefun
+          id: SILVER_DUST
           amount: 1-3
           weight: 8.0
-        - slimefunItem: ALUMINUM_DUST
+        - provider: slimefun
+          id: ALUMINUM_DUST
           amount: 1-3
           weight: 10.0
-        - slimefunItem: LEAD_DUST
+        - provider: slimefun
+          id: LEAD_DUST
           amount: 1-3
           weight: 8.0
-        - slimefunItem: RAG
+        - provider: slimefun
+          id: RAG
           amount: 1-2
           weight: 7.0
-        - slimefunItem: BANDAGE
+        - provider: slimefun
+          id: BANDAGE
           amount: 1-2
           weight: 5.0
+
+        - provider: pylon
+          id: pylon:rock_dust
+          amount: 1-4
+          weight: 10.0
+        - provider: pylon
+          id: pylon:iron_dust
+          amount: 1-4
+          weight: 10.0
+        - provider: pylon
+          id: pylon:copper_dust
+          amount: 1-4
+          weight: 10.0
+        - provider: pylon
+          id: pylon:gold_dust
+          amount: 1-3
+          weight: 8.0
+        - provider: pylon
+          id: pylon:tin_dust
+          amount: 1-4
+          weight: 8.0
+        - provider: pylon
+          id: pylon:bandage
+          amount: 1-2
+          weight: 4.0
+        - provider: pylon
+          id: pylon:monster_jerky
+          amount: 1-2
+          weight: 4.0
 
     rare:
       weight: 25.0
       items:
-        - slimefunItem: STEEL_INGOT
+        - provider: slimefun
+          id: STEEL_INGOT
           amount: 1-3
           weight: 16.0
-        - slimefunItem: BRONZE_INGOT
+        - provider: slimefun
+          id: BRONZE_INGOT
           amount: 1-3
           weight: 14.0
-        - slimefunItem: DURALUMIN_INGOT
+        - provider: slimefun
+          id: DURALUMIN_INGOT
           amount: 1-2
           weight: 12.0
-        - slimefunItem: BILLON_INGOT
+        - provider: slimefun
+          id: BILLON_INGOT
           amount: 1-2
           weight: 10.0
-        - slimefunItem: DAMASCUS_STEEL_INGOT
+        - provider: slimefun
+          id: DAMASCUS_STEEL_INGOT
           amount: 1-2
           weight: 6.0
-        - slimefunItem: SPLINT
+        - provider: slimefun
+          id: SPLINT
           amount: 1-2
           weight: 8.0
-        - slimefunItem: VITAMINS
+        - provider: slimefun
+          id: VITAMINS
           amount: 1
           weight: 5.0
+
+        - provider: pylon
+          id: pylon:bronze_ingot
+          amount: 1-3
+          weight: 8.0
+        - provider: pylon
+          id: pylon:steel_ingot
+          amount: 1-2
+          weight: 5.0
+        - provider: pylon
+          id: pylon:splint
+          amount: 1-2
+          weight: 4.0
+        - provider: pylon
+          id: pylon:shimmer_dust_1
+          amount: 1
+          weight: 3.0
 
     epic:
       weight: 5.0
       items:
-        - slimefunItem: HARDENED_METAL_INGOT
+        - provider: slimefun
+          id: HARDENED_METAL_INGOT
           amount: 1
           weight: 12.0
-        - slimefunItem: REINFORCED_ALLOY_INGOT
+        - provider: slimefun
+          id: REINFORCED_ALLOY_INGOT
           amount: 1
           weight: 5.0
-        - slimefunItem: GILDED_IRON
+        - provider: slimefun
+          id: GILDED_IRON
           amount: 1
           weight: 8.0
-        - slimefunItem: ANVIL_TALISMAN
+        - provider: slimefun
+          id: ANVIL_TALISMAN
           amount: 1
           weight: 5.0
-        - slimefunItem: MINER_TALISMAN
+        - provider: slimefun
+          id: MINER_TALISMAN
           amount: 1
           weight: 4.0
-        - slimefunItem: HUNTER_TALISMAN
+        - provider: slimefun
+          id: HUNTER_TALISMAN
           amount: 1
           weight: 4.0
-        - slimefunItem: TRAVELLER_TALISMAN
+        - provider: slimefun
+          id: TRAVELLER_TALISMAN
           amount: 1
           weight: 4.0
 
-# Optional overrides for BetterStructures' existing/native treasure filenames.
-# You do NOT need a treasure_slimefun.yml.
+        - provider: pylon
+          id: pylon:palladium_ingot
+          amount: 1
+          weight: 3.0
+        - provider: pylon
+          id: pylon:medkit
+          amount: 1
+          weight: 2.0
+        - provider: pylon
+          id: pylon:shimmer_dust_2
+          amount: 1
+          weight: 2.0
+
+# Rebar is also a live provider. Rebar itself is primarily a framework, so no
+# core Rebar item is forced into the default loot pool. Add any registered
+# Rebar/Rebar-addon NamespacedKey here when desired, for example:
 #
-# Examples:
+#        - provider: rebar
+#          id: youraddon:your_item
+#          amount: 1
+#          weight: 1.0
+#
+# Unqualified Rebar IDs default to the rebar: namespace.
+
+# Optional overrides for BetterStructures' existing/native treasure filenames.
+# These rules are NOT required. The global chance above applies to all generated
+# BetterStructures loot containers by default.
+#
 # treasure-tables:
 #   - match: "treasure_end.yml"
 #     chance-percent: 2.0

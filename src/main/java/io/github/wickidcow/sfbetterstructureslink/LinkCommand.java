@@ -36,9 +36,13 @@ final class LinkCommand implements CommandExecutor, TabCompleter {
             case "reload" -> {
                 LootService.ValidationReport report = plugin.reloadBridge();
                 sender.sendMessage("§aSF BetterStructures Link reloaded.");
+                sendProviders(sender);
                 sendValidation(sender, report);
             }
-            case "validate" -> sendValidation(sender, plugin.getLootService().validateConfiguredItems());
+            case "validate" -> {
+                sendProviders(sender);
+                sendValidation(sender, plugin.getLootService().validateConfiguredItems());
+            }
             case "status" -> sendStatus(sender);
             default -> sender.sendMessage("§eUsage: /" + label + " <status|reload|validate>");
         }
@@ -60,17 +64,33 @@ final class LinkCommand implements CommandExecutor, TabCompleter {
                 + status.eligibleContainers() + " / "
                 + status.triggeredContainers() + " / "
                 + status.injectedStacks());
+        sendProviders(sender);
+    }
+
+    private void sendProviders(CommandSender sender) {
+        sender.sendMessage("§7Item providers:");
+        for (ItemProviderRegistry.ProviderState state : plugin.getItemProviders().states()) {
+            String status = state.available()
+                    ? "§aactive"
+                    : state.configuredEnabled() ? "§eunavailable" : "§8disabled";
+            sender.sendMessage("§8- §f" + state.id() + ": " + status + " §7(" + state.detail() + ")");
+        }
     }
 
     private void sendValidation(CommandSender sender, LootService.ValidationReport report) {
-        sender.sendMessage("§7Configured IDs: §a" + report.valid() + " valid§7, §e"
-                + report.disabled() + " disabled§7, §c" + report.missing() + " missing§7.");
+        sender.sendMessage("§7Configured entries: §a" + report.valid() + " valid§7, §e"
+                + report.disabled() + " disabled§7, §c" + report.missing() + " missing§7, §6"
+                + report.unavailable() + " provider-unavailable§7, §c"
+                + report.errors() + " errors§7.");
 
-        if (!report.missingIds().isEmpty()) {
-            sender.sendMessage("§cMissing: " + String.join(", ", report.missingIds()));
+        if (!report.missingEntries().isEmpty()) {
+            sender.sendMessage("§cMissing: " + String.join(", ", report.missingEntries()));
         }
-        if (!report.disabledIds().isEmpty()) {
-            sender.sendMessage("§eDisabled: " + String.join(", ", report.disabledIds()));
+        if (!report.disabledEntries().isEmpty()) {
+            sender.sendMessage("§eDisabled: " + String.join(", ", report.disabledEntries()));
+        }
+        if (!report.errorEntries().isEmpty()) {
+            sender.sendMessage("§cErrors: " + String.join(", ", report.errorEntries()));
         }
     }
 

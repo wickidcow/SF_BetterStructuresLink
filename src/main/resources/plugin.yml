@@ -1,13 +1,18 @@
 name: SF_BetterStructuresLink
-version: '\${project.version}'
+version: '${project.version}'
 main: io.github.wickidcow.sfbetterstructureslink.SFBetterStructuresLink
 api-version: '1.21'
 author: wickidcow
-description: Adds configurable registered Slimefun loot to BetterStructures-generated containers.
+description: Adds optional Slimefun, Rebar and Pylon loot to BetterStructures-generated containers.
 website: https://github.com/wickidcow/SF_BetterStructuresLink
+
 depend:
   - BetterStructures
+
+softdepend:
   - Slimefun
+  - Rebar
+  - Pylon
 
 commands:
   sfbsl:

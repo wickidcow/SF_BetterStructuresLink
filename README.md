@@ -1,80 +1,82 @@
 # SF BetterStructures Link
 
-A lightweight bridge between [MagmaGuy's BetterStructures](https://github.com/MagmaGuy/BetterStructures) and Slimefun.
+A lightweight multi-ecosystem loot bridge for [MagmaGuy's BetterStructures](https://github.com/MagmaGuy/BetterStructures).
 
-SF BetterStructures Link adds **real registered Slimefun items** to BetterStructures-generated loot containers at configurable rare rates without modifying or patching BetterStructures.
+The plugin can add **real registered items** from optional content systems to BetterStructures-generated chests and barrels without patching BetterStructures.
 
-## Important: no Slimefun BetterStructures treasure file is required
+## Optional item providers
 
-Do **not** put `slimefunItem:` entries inside BetterStructures treasure YAML files.
+Only BetterStructures is a hard dependency.
 
-BetterStructures parses its own treasure files and does not understand that key. SF BetterStructures Link now owns the Slimefun loot table completely:
+At startup the bridge detects:
 
-1. BetterStructures generates a structure and fills a chest/barrel with its normal loot.
-2. BetterStructures fires `ChestFillEvent`.
-3. SF BetterStructures Link rolls its own independent rare chance.
-4. If successful, it selects a Slimefun rarity tier and item.
-5. The actual registered Slimefun `ItemStack` is cloned into a free slot.
+- **Slimefun** — resolves registered Slimefun item IDs.
+- **Rebar** — resolves registered Rebar/Rebar-addon NamespacedKeys.
+- **Pylon** — resolves `pylon:*` items through Rebar's live item registry.
 
-This means `treasure_slimefun.yml` can be deleted.
+If one provider is missing, its loot entries are automatically removed from the effective weighted roll. The remaining installed providers continue normally.
 
-## Default migrated loot
+Pylon depends on Rebar, so Pylon item resolution intentionally uses Rebar's canonical registry rather than copying Pylon ItemStacks.
 
-The default configuration contains the 23 Slimefun items previously used by the old `treasure_slimefun.yml` and preserves its two-stage rarity weighting:
+## No special BetterStructures treasure file
+
+Do **not** create `treasure_slimefun.yml`, `treasure_pylon.yml`, or similar files.
+
+BetterStructures generates its structure and normal treasure first. Its public `ChestFillEvent` then gives this plugin the generated container snapshot. The bridge independently performs its rare item roll and adds the real registered ItemStack to a free slot.
+
+## Default loot
+
+The migrated Slimefun table preserves the old:
 
 - Common: 70
 - Rare: 25
 - Epic: 5
 
-Item-specific weights and stack-size ranges are also preserved.
+rarity split and the original item-specific amounts/weights.
 
-By default, the whole Slimefun table has a **1% chance per BetterStructures-generated loot container** and adds at most one Slimefun stack when the roll succeeds.
+The default configuration also contains a conservative set of Pylon resources and consumables. Powerful machines, creative sources, debug items and administrative items are intentionally not auto-discovered.
 
-## Compatibility
-
-- Java 21
-- Minecraft 1.21.11+
-- Paper / Purpur
-- BetterStructures
-- Slimefun Legacy and compatible Slimefun API forks
-
-Paper 26.x is a primary target while retaining the 1.21.11 compatibility floor.
-
-## Configuration
+Rebar itself is primarily the framework rather than the content pack, so no Rebar core item is forced into the default pool. Any registered Rebar or Rebar-addon item can be added by NamespacedKey:
 
 ```yaml
+- provider: rebar
+  id: youraddon:your_item
+  amount: 1
+  weight: 1.0
+```
+
+## Configuration example
+
+```yaml
+providers:
+  slimefun:
+    enabled: true
+  rebar:
+    enabled: true
+  pylon:
+    enabled: true
+
 loot:
   enabled: true
   chance-percent: 1.0
   rolls: 1
   max-items-per-container: 1
-  default-pool: slimefun
+  default-pool: mixed
 
 pools:
-  slimefun:
+  mixed:
     common:
       weight: 70.0
       items:
-        - slimefunItem: IRON_DUST
+        - provider: slimefun
+          id: IRON_DUST
           amount: 1-4
           weight: 14.0
-    rare:
-      weight: 25.0
-      items:
-        - slimefunItem: STEEL_INGOT
-          amount: 1-3
-          weight: 16.0
-    epic:
-      weight: 5.0
-      items:
-        - slimefunItem: REINFORCED_ALLOY_INGOT
-          amount: 1
-          weight: 5.0
-
-treasure-tables: []
+        - provider: pylon
+          id: pylon:iron_dust
+          amount: 1-4
+          weight: 10.0
 ```
-
-The global default applies to every BetterStructures loot container. Optional `treasure-tables` rules can override the chance, rolls, cap, or pool for BetterStructures' existing filenames such as `treasure_end.yml`, `treasure_nether.yml`, or `treasure_overworld_underground.yml`.
 
 ## Commands
 
@@ -82,11 +84,16 @@ The global default applies to every BetterStructures loot container. Optional `t
 - `/sfbsl reload`
 - `/sfbsl validate`
 
-## Goals
+`status` shows which optional providers are active. `validate` checks every configured item against the currently installed registries.
 
-- Keep BetterStructures untouched and independently updatable.
-- Resolve items from the live Slimefun registry by item ID.
-- Support Slimefun core and registered addon items.
-- Never replace normal BetterStructures loot.
-- Keep structure-generation overhead negligible.
-- Skip missing/disabled optional addon items safely.
+## Compatibility
+
+- Java 21 bytecode
+- Minecraft 1.21.11+
+- Paper / Purpur
+- BetterStructures
+- Optional Slimefun
+- Optional Rebar
+- Optional Pylon
+
+The project keeps BetterStructures independent and avoids changing Slimefun/Rebar/Pylon persistence, block storage, machine data, or registries.

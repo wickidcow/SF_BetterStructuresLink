@@ -1,6 +1,5 @@
 package io.github.wickidcow.sfbetterstructureslink;
 
-import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -21,6 +20,7 @@ import org.bukkit.inventory.ItemStack;
 public final class LootService {
 
     private final SFBetterStructuresLink plugin;
+    private final ItemProviderRegistry providers;
 
     private boolean enabled;
     private boolean debug;
@@ -37,8 +37,9 @@ public final class LootService {
     private long triggeredContainers;
     private long injectedStacks;
 
-    LootService(SFBetterStructuresLink plugin) {
+    LootService(SFBetterStructuresLink plugin, ItemProviderRegistry providers) {
         this.plugin = plugin;
+        this.providers = providers;
     }
 
     public void reload() {
@@ -49,7 +50,7 @@ public final class LootService {
         defaultChancePercent = clampChance(config.getDouble("loot.chance-percent", 1.0));
         defaultRolls = Math.max(1, config.getInt("loot.rolls", 1));
         defaultMaxItems = Math.max(1, config.getInt("loot.max-items-per-container", 1));
-        defaultPool = config.getString("loot.default-pool", "slimefun");
+        defaultPool = config.getString("loot.default-pool", "mixed");
 
         allowedWorlds = normalizeWorlds(config.getStringList("loot.worlds.allow"));
         deniedWorlds = normalizeWorlds(config.getStringList("loot.worlds.deny"));
@@ -59,11 +60,11 @@ public final class LootService {
 
         if (defaultPool == null || !pools.containsKey(defaultPool)) {
             plugin.getLogger().warning("Default loot pool '" + defaultPool
-                    + "' does not exist. Slimefun loot injection will be skipped until it is fixed.");
+                    + "' does not exist. Custom structure loot will be skipped until it is fixed.");
         }
 
         if (pools.isEmpty()) {
-            plugin.getLogger().warning("No Slimefun loot pools are configured.");
+            plugin.getLogger().warning("No external-item loot pools are configured.");
         }
     }
 
@@ -83,8 +84,9 @@ public final class LootService {
         }
 
         LootPool pool = pools.get(rule.pool());
-        if (pool == null || pool.tiers().isEmpty() || pool.totalWeight() <= 0.0) {
-            debug("Skipped container because pool '" + rule.pool() + "' is unavailable.");
+        if (pool == null || !pool.hasAvailableEntries(providers)) {
+            debug("Skipped container because pool '" + rule.pool()
+                    + "' has no entries from currently available providers.");
             return;
         }
 
@@ -97,27 +99,42 @@ public final class LootService {
         Inventory inventory = container.getSnapshotInventory();
         List<Integer> freeSlots = findFreeSlots(inventory);
         if (freeSlots.isEmpty()) {
-            debug("Slimefun loot roll succeeded, but the generated container had no free slots.");
+            debug("Custom loot roll succeeded, but the generated container had no free slots.");
             return;
         }
 
         triggeredContainers++;
 
         int stackLimit = Math.min(rule.rolls(), rule.maxItems());
-
         for (int roll = 0; roll < stackLimit && !freeSlots.isEmpty(); roll++) {
-            LootEntry entry = pool.pick();
+            boolean inserted = tryInsertOne(pool, inventory, freeSlots, treasureConfigFilename, world);
+            if (!inserted) {
+                debug("Could not resolve a valid registered item for this loot roll.");
+            }
+        }
+    }
+
+    private boolean tryInsertOne(
+            LootPool pool,
+            Inventory inventory,
+            List<Integer> freeSlots,
+            String treasureConfigFilename,
+            World world) {
+        for (int attempt = 0; attempt < 6; attempt++) {
+            LootEntry entry = pool.pick(providers);
             if (entry == null) {
-                break;
+                return false;
             }
 
-            SlimefunItem slimefunItem = SlimefunItem.getById(entry.id());
-            if (slimefunItem == null || slimefunItem.isDisabled()) {
-                debug("Skipped unavailable Slimefun item ID " + entry.id());
+            ItemProviderRegistry.Resolution resolution =
+                    providers.resolve(entry.provider(), entry.id());
+            if (resolution.status() != ItemProviderRegistry.ResolutionStatus.AVAILABLE
+                    || resolution.stack() == null) {
+                debug("Skipped " + entry.displayId() + ": " + resolution.detail());
                 continue;
             }
 
-            ItemStack stack = slimefunItem.getItem().clone();
+            ItemStack stack = resolution.stack();
             int requestedAmount = ThreadLocalRandom.current().nextInt(
                     entry.minAmount(), entry.maxAmount() + 1);
             stack.setAmount(Math.max(1, Math.min(requestedAmount, stack.getMaxStackSize())));
@@ -127,47 +144,73 @@ public final class LootService {
             inventory.setItem(slot, stack);
             injectedStacks++;
 
-            debug("Added " + stack.getAmount() + "x " + entry.id()
+            debug("Added " + stack.getAmount() + "x " + entry.displayId()
                     + " to BetterStructures treasure table "
                     + (treasureConfigFilename == null ? "<unknown>" : treasureConfigFilename)
                     + " in world " + world.getName());
+            return true;
         }
+
+        return false;
     }
 
     public ValidationReport validateConfiguredItems() {
-        Set<String> ids = new LinkedHashSet<>();
+        Set<String> seen = new LinkedHashSet<>();
+        int valid = 0;
+        int missing = 0;
+        int disabled = 0;
+        int unavailable = 0;
+        int errors = 0;
+
+        List<String> missingEntries = new ArrayList<>();
+        List<String> disabledEntries = new ArrayList<>();
+        List<String> unavailableEntries = new ArrayList<>();
+        List<String> errorEntries = new ArrayList<>();
+
         for (LootPool pool : pools.values()) {
             for (LootTier tier : pool.tiers()) {
                 for (LootEntry entry : tier.entries()) {
-                    ids.add(entry.id());
+                    if (!seen.add(entry.displayId())) {
+                        continue;
+                    }
+
+                    ItemProviderRegistry.Resolution resolution =
+                            providers.resolve(entry.provider(), entry.id());
+
+                    switch (resolution.status()) {
+                        case AVAILABLE -> valid++;
+                        case MISSING -> {
+                            missing++;
+                            missingEntries.add(entry.displayId());
+                        }
+                        case DISABLED -> {
+                            disabled++;
+                            disabledEntries.add(entry.displayId());
+                        }
+                        case PROVIDER_UNAVAILABLE -> {
+                            unavailable++;
+                            unavailableEntries.add(entry.displayId());
+                        }
+                        case ERROR -> {
+                            errors++;
+                            errorEntries.add(entry.displayId());
+                        }
+                    }
                 }
             }
         }
 
-        int valid = 0;
-        int disabled = 0;
-        List<String> missingIds = new ArrayList<>();
-        List<String> disabledIds = new ArrayList<>();
-
-        for (String id : ids) {
-            SlimefunItem item = SlimefunItem.getById(id);
-            if (item == null) {
-                missingIds.add(id);
-            } else if (item.isDisabled()) {
-                disabled++;
-                disabledIds.add(id);
-            } else {
-                valid++;
-            }
-        }
-
         return new ValidationReport(
-                ids.size(),
+                seen.size(),
                 valid,
-                missingIds.size(),
+                missing,
                 disabled,
-                List.copyOf(missingIds),
-                List.copyOf(disabledIds));
+                unavailable,
+                errors,
+                List.copyOf(missingEntries),
+                List.copyOf(disabledEntries),
+                List.copyOf(unavailableEntries),
+                List.copyOf(errorEntries));
     }
 
     public Status status() {
@@ -234,27 +277,12 @@ public final class LootService {
             double totalItemWeight = 0.0;
 
             for (Map<?, ?> itemMap : tierSection.getMapList("items")) {
-                String id = stringValue(itemMap.get("slimefunItem"));
-                if (id == null || id.isBlank()) {
-                    id = stringValue(itemMap.get("id"));
-                }
-                if (id == null || id.isBlank()) {
-                    plugin.getLogger().warning("Ignoring item without slimefunItem/id in "
-                            + poolName + "." + tierName);
+                LootEntry entry = parseLootEntry(poolName, tierName, itemMap);
+                if (entry == null) {
                     continue;
                 }
-
-                Double weightValue = doubleValue(itemMap.get("weight"));
-                double itemWeight = weightValue == null ? 1.0 : weightValue;
-                if (!Double.isFinite(itemWeight) || itemWeight <= 0.0) {
-                    plugin.getLogger().warning("Ignoring " + id + " in " + poolName + "." + tierName
-                            + " because its weight is not positive.");
-                    continue;
-                }
-
-                AmountRange amount = parseAmount(itemMap.get("amount"), 1, 1);
-                entries.add(new LootEntry(id, itemWeight, amount.min(), amount.max()));
-                totalItemWeight += itemWeight;
+                entries.add(entry);
+                totalItemWeight += entry.weight();
             }
 
             if (!entries.isEmpty() && totalItemWeight > 0.0) {
@@ -267,6 +295,48 @@ public final class LootService {
         }
 
         return tiers;
+    }
+
+    private LootEntry parseLootEntry(String poolName, String tierName, Map<?, ?> itemMap) {
+        String provider = stringValue(itemMap.get("provider"));
+        String id = stringValue(itemMap.get("id"));
+
+        String slimefunItem = stringValue(itemMap.get("slimefunItem"));
+        String rebarItem = stringValue(itemMap.get("rebarItem"));
+        String pylonItem = stringValue(itemMap.get("pylonItem"));
+
+        if (slimefunItem != null && !slimefunItem.isBlank()) {
+            provider = "slimefun";
+            id = slimefunItem;
+        } else if (pylonItem != null && !pylonItem.isBlank()) {
+            provider = "pylon";
+            id = pylonItem;
+        } else if (rebarItem != null && !rebarItem.isBlank()) {
+            provider = "rebar";
+            id = rebarItem;
+        }
+
+        if (provider == null || provider.isBlank() || id == null || id.isBlank()) {
+            plugin.getLogger().warning("Ignoring item without provider/id in "
+                    + poolName + "." + tierName);
+            return null;
+        }
+
+        Double weightValue = doubleValue(itemMap.get("weight"));
+        double itemWeight = weightValue == null ? 1.0 : weightValue;
+        if (!Double.isFinite(itemWeight) || itemWeight <= 0.0) {
+            plugin.getLogger().warning("Ignoring " + provider + ":" + id + " in "
+                    + poolName + "." + tierName + " because its weight is not positive.");
+            return null;
+        }
+
+        AmountRange amount = parseAmount(itemMap.get("amount"), 1, 1);
+        return new LootEntry(
+                provider.trim().toLowerCase(Locale.ROOT),
+                id.trim(),
+                itemWeight,
+                amount.min(),
+                amount.max());
     }
 
     private List<LootTier> loadLegacyFlatPool(String poolName, ConfigurationSection poolSection) {
@@ -289,7 +359,7 @@ public final class LootService {
                 continue;
             }
 
-            entries.add(new LootEntry(itemId, weight, min, max));
+            entries.add(new LootEntry("slimefun", itemId, weight, min, max));
             totalWeight += weight;
         }
 
@@ -481,7 +551,17 @@ public final class LootService {
 
     private record AmountRange(int min, int max) {}
 
-    private record LootEntry(String id, double weight, int minAmount, int maxAmount) {}
+    private record LootEntry(
+            String provider,
+            String id,
+            double weight,
+            int minAmount,
+            int maxAmount) {
+
+        String displayId() {
+            return provider + ":" + id;
+        }
+    }
 
     private record LootTier(
             String name,
@@ -489,39 +569,67 @@ public final class LootService {
             List<LootEntry> entries,
             double totalItemWeight) {
 
-        LootEntry pick() {
-            if (entries.isEmpty() || totalItemWeight <= 0.0) {
+        boolean hasAvailableEntries(ItemProviderRegistry providers) {
+            return entries.stream().anyMatch(entry -> providers.isAvailable(entry.provider()));
+        }
+
+        LootEntry pick(ItemProviderRegistry providers) {
+            double effectiveTotal = entries.stream()
+                    .filter(entry -> providers.isAvailable(entry.provider()))
+                    .mapToDouble(LootEntry::weight)
+                    .sum();
+
+            if (effectiveTotal <= 0.0) {
                 return null;
             }
 
-            double roll = ThreadLocalRandom.current().nextDouble(totalItemWeight);
+            double roll = ThreadLocalRandom.current().nextDouble(effectiveTotal);
             double cumulative = 0.0;
+
             for (LootEntry entry : entries) {
+                if (!providers.isAvailable(entry.provider())) {
+                    continue;
+                }
                 cumulative += entry.weight();
                 if (roll < cumulative) {
                     return entry;
                 }
             }
-            return entries.get(entries.size() - 1);
+
+            return null;
         }
     }
 
     private record LootPool(String name, List<LootTier> tiers, double totalWeight) {
-        LootEntry pick() {
-            if (tiers.isEmpty() || totalWeight <= 0.0) {
+
+        boolean hasAvailableEntries(ItemProviderRegistry providers) {
+            return tiers.stream().anyMatch(tier -> tier.hasAvailableEntries(providers));
+        }
+
+        LootEntry pick(ItemProviderRegistry providers) {
+            double effectiveTierWeight = tiers.stream()
+                    .filter(tier -> tier.hasAvailableEntries(providers))
+                    .mapToDouble(LootTier::weight)
+                    .sum();
+
+            if (effectiveTierWeight <= 0.0) {
                 return null;
             }
 
-            double roll = ThreadLocalRandom.current().nextDouble(totalWeight);
+            double roll = ThreadLocalRandom.current().nextDouble(effectiveTierWeight);
             double cumulative = 0.0;
+
             for (LootTier tier : tiers) {
+                if (!tier.hasAvailableEntries(providers)) {
+                    continue;
+                }
                 cumulative += tier.weight();
                 if (roll < cumulative) {
-                    return tier.pick();
+                    return tier.pick(providers);
                 }
             }
 
-            return tiers.get(tiers.size() - 1).pick();
+            return null;
         }
     }
 
@@ -546,8 +654,12 @@ public final class LootService {
             int valid,
             int missing,
             int disabled,
-            List<String> missingIds,
-            List<String> disabledIds) {}
+            int unavailable,
+            int errors,
+            List<String> missingEntries,
+            List<String> disabledEntries,
+            List<String> unavailableEntries,
+            List<String> errorEntries) {}
 
     public record Status(
             boolean enabled,
