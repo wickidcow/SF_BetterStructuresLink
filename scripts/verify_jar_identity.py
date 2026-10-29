@@ -22,7 +22,7 @@ def verify_jar(path):
         descriptor = jar.read("plugin.yml").decode("utf-8")
         for pattern in (
             r"(?m)^name:\s*SF_BetterStructuresLink\s*$",
-            r"(?m)^version:\s*['\\"]?0\.3\.1-SNAPSHOT['\\"]?\s*$",
+            r"""(?m)^version:\s*['"]?0\.3\.1-SNAPSHOT['"]?\s*$""",
             r"(?m)^main:\s*io\.github\.wickidcow\.sfbetterstructureslink\.SFBetterStructuresLink\s*$",
         ):
             if not re.search(pattern, descriptor):
