@@ -21,9 +21,9 @@ def verify_jar(path):
             raise ValueError("Missing Bukkit plugin descriptor")
         descriptor = jar.read("plugin.yml").decode("utf-8")
         for pattern in (
-            r"(?m)^name:\\s*SF_BetterStructuresLink\\s*$",
-            r"(?m)^version:\\s*['\\\"]?0\\.3\\.1-SNAPSHOT['\\\"]?\\s*$",
-            r"(?m)^main:\\s*io\\.github\\.wickidcow\\.sfbetterstructureslink\\.SFBetterStructuresLink\\s*$",
+            r"(?m)^name:\s*SF_BetterStructuresLink\s*$",
+            r"(?m)^version:\s*['\\"]?0\.3\.1-SNAPSHOT['\\"]?\s*$",
+            r"(?m)^main:\s*io\.github\.wickidcow\.sfbetterstructureslink\.SFBetterStructuresLink\s*$",
         ):
             if not re.search(pattern, descriptor):
                 raise ValueError("Missing or altered plugin identity: " + pattern)
@@ -37,7 +37,7 @@ def verify_jar(path):
             raise ValueError("Plugin main class missing from distributable JAR")
         for class_path in classes:
             data = jar.read(class_path)
-            if len(data) < 8 or data[:4] != b"\\xca\\xfe\\xba\\xbe":
+            if len(data) < 8 or data[:4] != b"\xca\xfe\xba\xbe":
                 raise ValueError("Invalid JVM class: " + class_path)
             major = struct.unpack(">H", data[6:8])[0]
             if major > 65:  # Java 21 classfile version

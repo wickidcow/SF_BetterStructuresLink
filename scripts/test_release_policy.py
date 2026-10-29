@@ -9,13 +9,13 @@ WORKFLOW_DIR = ROOT / ".github" / "workflows"
 
 # No release/tag write path belongs in the ordinary push/PR build workflow.
 FORBIDDEN = (
-    ("release mutation", re.compile(r"\\bgh\\s+release\\s+(?:create|edit|upload|delete)\\b", re.I)),
-    ("GitHub API mutation", re.compile(r"\\bgh\\s+api[^\\n]*(?:--method[=\\s]+|-X\\s+)(?:PATCH|POST|PUT|DELETE)\\b", re.I)),
-    ("forceful tag or ref mutation", re.compile(r"\\bforce\\s*=\\s*true\\b|--force(?:-with-lease)?\\b", re.I)),
-    ("clobbered asset", re.compile(r"--clobber\\b", re.I)),
-    ("git push from CI", re.compile(r"\\bgit\\s+push\\b", re.I)),
+    ("release mutation", re.compile(r"\bgh\s+release\s+(?:create|edit|upload|delete)\b", re.I)),
+    ("GitHub API mutation", re.compile(r"\bgh\s+api[^\n]*(?:--method[=\s]+|-X\s+)(?:PATCH|POST|PUT|DELETE)\b", re.I)),
+    ("forceful tag or ref mutation", re.compile(r"\bforce\s*=\s*true\b|--force(?:-with-lease)?\b", re.I)),
+    ("clobbered asset", re.compile(r"--clobber\b", re.I)),
+    ("git push from CI", re.compile(r"\bgit\s+push\b", re.I)),
     ("publisher action", re.compile(r"softprops/action-gh-release|actions/create-release|ncipollo/release-action|upload-release-asset", re.I)),
-    ("write via curl", re.compile(r"\\bcurl\\b[^\\n]*(?:-X|--request)\\s+(?:PATCH|POST|PUT|DELETE)\\b", re.I)),
+    ("write via curl", re.compile(r"\bcurl\b[^\n]*(?:-X|--request)\s+(?:PATCH|POST|PUT|DELETE)\b", re.I)),
 )
 
 
