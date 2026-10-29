@@ -6,7 +6,9 @@ Build with `mvn clean verify`. The build checks configuration call bytecode agai
 
 # SF BetterStructures Link
 
-[Download the raw 0.3.1-SNAPSHOT JAR](https://github.com/wickidcow/SF_BetterStructuresLink/releases/download/dev-build/SF_BetterStructuresLink-0.3.1-SNAPSHOT.jar). Place it directly in `plugins/` and restart.
+[Historical immutable 0.3.1-SNAPSHOT JAR](https://github.com/wickidcow/SF_BetterStructuresLink/releases/download/dev-build/SF_BetterStructuresLink-0.3.1-SNAPSHOT.jar). Place the raw JAR directly in `plugins/` and restart. Its published SHA-256 is `6f34c294174ac7cf7e425e5881b4fdca5302ec5db92497e064d06b6d147e0815`.
+
+The `dev-build` tag and release asset are **frozen historical artifacts**, not a moving latest-version link. New source commits only build and retain a separate commit-SHA-scoped GitHub Actions artifact. They never force-update this tag, overwrite this release asset or silently republish a version. A new downloadable release requires a distinct new tag/version and independent checked publication gate.
 
 A lightweight multi-ecosystem loot bridge for [MagmaGuy's BetterStructures](https://github.com/MagmaGuy/BetterStructures).
 
