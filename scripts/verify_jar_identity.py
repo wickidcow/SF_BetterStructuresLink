@@ -29,21 +29,32 @@ def verify_jar(path):
                 raise ValueError("Missing or altered plugin identity: " + pattern)
         if any(x.startswith(("org/bukkit/", "io/papermc/paper/")) for x in names):
             raise ValueError("Server API bundled in distributable plugin")
-        classes = [
-            x for x in names
-            if x.startswith("io/github/wickidcow/sfbetterstructureslink/") and x.endswith(".class")
+        # Do not miss incompatible bytecode hidden outside the plugin namespace.
+        # Retain the canonical plugin-main/owned-class identity requirement.
+        class_files = [name for name in names if name.endswith(".class")]
+        owned_classes = [
+            name for name in class_files
+            if name.startswith("io/github/wickidcow/sfbetterstructureslink/")
         ]
-        if not classes or "io/github/wickidcow/sfbetterstructureslink/SFBetterStructuresLink.class" not in classes:
+        if not owned_classes or "io/github/wickidcow/sfbetterstructureslink/SFBetterStructuresLink.class" not in owned_classes:
             raise ValueError("Plugin main class missing from distributable JAR")
-        for class_path in classes:
-            data = jar.read(class_path)
-            if len(data) < 8 or data[:4] != b"\xca\xfe\xba\xbe":
+        for class_path in class_files:
+            header = jar.read(class_path)[:8]
+            if len(header) != 8 or header[:4] != b"\xca\xfe\xba\xbe":
                 raise ValueError("Invalid JVM class: " + class_path)
-            major = struct.unpack(">H", data[6:8])[0]
-            if major > 65:  # Java 21 classfile version
-                raise ValueError("Java >21 bytecode: " + class_path + " (" + str(major) + ")")
+            minor, major = struct.unpack(">HH", header[4:8])
+            if not 45 <= major <= 65:  # Java 21 classfile ceiling
+                raise ValueError("Unsupported Java bytecode: " + class_path + " (" + str(major) + "." + str(minor) + ")")
+            # JVMS 4.1: modern classfiles require minor 0 for stable code.
+            # Minor 65535 is preview bytecode, which requires --enable-preview
+            # for its *specific* release and is not a stable distributable.
+            if major >= 56 and minor != 0:
+                kind = "preview" if minor == 65535 else "invalid minor"
+                raise ValueError("Non-distributable " + kind + " bytecode: "
+                                 + class_path + " (" + str(major) + "." + str(minor) + ")")
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    print(f"Verified raw BetterStructuresLink JAR: {path.name}; {len(classes)} Java 21-or-earlier classes; sha256:{digest}")
+    print(f"Verified raw BetterStructuresLink JAR: {path.name}; {len(owned_classes)} owned, "
+          f"{len(class_files)} packaged Java 21-or-earlier non-preview classes; sha256:{digest}")
 
 
 if __name__ == "__main__":
