@@ -33,6 +33,9 @@ jobs:
       - name: Verify immutable release workflow policy
         run: python3 -m unittest discover -s scripts -p 'test_release_policy.py' -v
 
+      - name: Verify complete Java 21 bytecode rejection controls
+        run: python3 -m unittest discover -s scripts -p 'test_verify_jar_identity.py' -v
+
       - name: Build
         run: mvn -B -ntp clean verify
 
